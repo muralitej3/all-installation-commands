@@ -95,3 +95,51 @@ trivy url
 curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin v0.75.0
 trivy version
 trivy image imagename
+
+
+-----------------------------------------------------------------------------------------
+kops,kubectl,cluster creation,s3 bucker
+
+curl -Lo kops https://github.com/kubernetes/kops/releases/download/$(curl -s https://api.github.com/repos/kubernetes/kops/releases/latest | grep tag_name | cut -d '"' -f 4)/kops-linux-amd64
+chmod +x kops
+sudo mv kops /usr/local/bin/kops
+kops version
+
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/kubectl
+kubectl version --client
+aws s3 ls
+export KOPS_STATE_STORE=s3://muralitej3
+ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
+kops create cluster \
+  --name murali1.k8s.local \
+  --zones us-east-1a,us-east-1b \
+  --control-plane-count 1 \
+  --control-plane-size c7i-flex.large \
+  --control-plane-volume-size 30 \
+  --node-count 2 \
+  --node-size t3.micro \
+  --node-volume-size 20 \
+  --image ami-0b6d9d3d33ba97d99 \
+  --ssh-public-key ~/.ssh/id_rsa.pub
+
+kops update cluster --name murali1.k8s.local --yes --admin
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
