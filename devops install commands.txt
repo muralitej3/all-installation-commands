@@ -127,6 +127,16 @@ kops create cluster \
 kops update cluster --name murali1.k8s.local --yes --admin
 
 
+kops create cluster \
+  --name=murali1.k8s.local \
+  --zones=us-east-1a \
+  --image=ami-0b6d9d3d33ba97d99 \
+  --node-count=2 \
+  --node-size=t3.medium \
+  --control-plane-size=t3.medium \
+  --yes
+
+
 
 
 
