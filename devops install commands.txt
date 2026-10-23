@@ -138,6 +138,11 @@ kops create cluster \
   --node-volume-size 20 \
   --image ami-0b6d9d3d33ba97d99
 kops update cluster --name muralitej3.k8s.local --yes --admin
+
+
+export KOPS_STATE_STORE=s3://muralitej3
+kops get cluster
+kops delete cluster --name=murali1.k8s.local --yes
 kops delete cluster --name=muralitej3.k8s.local --state=s3://muralitej3 --yes
 
 
