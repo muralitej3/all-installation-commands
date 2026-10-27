@@ -10,3 +10,21 @@ aws s3 ls
 export KOPS_STATE_STORE=s3://muralitej3-kops
 create cluster
 kops create cluster --name murali.k8s.local --zones us-east-1a,us-east-1b --master-count 1 --master-size c7i-flex.large --master-volume-size 30 --node-count 2 --node-size t3.micro --node-volume-size 20 --image=ami-0d97d7f07b25dd693
+----------------------------------------------------------
+aws s3api create-bucket --bucket muralitej3-kops --region us-east-1
+aws s3api put-bucket-versioning --bucket muralitej3-kops --versioning-configuration Status=Enabled
+export KOPS_STATE_STORE=s3://muralitej3-kops
+
+kops create cluster \
+  --name murali.k8s.local \
+  --zones us-east-1a,us-east-1b \
+  --control-plane-count 1 \
+  --control-plane-size c7i-flex.large \
+  --control-plane-volume-size 30 \
+  --node-count 2 \
+  --node-size t3.medium \
+  --node-volume-size 20 \
+  --image=ami-0d97d7f07b25dd693
+
+kops update cluster --name murali.k8s.local --yes --admin
+kops validate cluster --wait 10m
