@@ -55,7 +55,9 @@ kops validate cluster --wait 10m
    kops update cluster --name murali.k8s.local --yes --admin
 
 
-
+export KOPS_STATE_STORE=s3://muralitej3-kops
+kops get cluster
+kops delete cluster --name murali.k8s.local --yes
 
 
 
