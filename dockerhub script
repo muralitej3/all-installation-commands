@@ -1,0 +1,27 @@
+cd /root/ultimate-devops-project-demo
+cat > push-all.sh <<'END'
+#!/usr/bin/env bash
+set -e
+U=muraligorantla
+D=ghcr.io/open-telemetry/demo:2.1.3
+n=0
+for s in accounting ad cart checkout currency email fraud-detection frontend frontend-proxy image-provider load-generator payment product-catalog quote recommendation shipping flagd flagd-ui kafka postgresql valkey jaeger grafana otel-collector prometheus opensearch; do
+  n=$((n+1))
+  case $s in
+    flagd) src=ghcr.io/open-feature/flagd:v0.12.9 ;;
+    valkey) src=valkey/valkey:8.1.3-alpine ;;
+    jaeger) src=jaegertracing/jaeger:2.10.0 ;;
+    grafana) src=grafana/grafana:12.2.0 ;;
+    otel-collector) src=ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.133.0 ;;
+    prometheus) src=quay.io/prometheus/prometheus:v3.5.0 ;;
+    opensearch) src=ultimate-devops-project-demo-opensearch:latest ;;
+    *) src=$D-$s ;;
+  esac
+  echo "=== [$n/26] $U/$s:s$n"
+  docker tag "$src" "$U/$s:s$n"
+  docker push "$U/$s:s$n"
+done
+echo "All $n images pushed"
+END
+nohup bash push-all.sh > push.log 2>&1 &
+sleep 5; tail -f push.log
