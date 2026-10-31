@@ -1,0 +1,145 @@
+pipeline {
+    agent any
+
+    environment {
+        USER       = 'muraligorantla'
+        JAVA_AGENT = '2.20.1'
+        CPP_VER    = '1.23.0'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/muralitej3/26-services-project-ecomerse.git'
+            }
+        }
+
+        stage('Build images') {
+            steps {
+                sh '''
+                docker build -f ./src/accounting/Dockerfile       -t $USER/accounting:s1 .
+                docker build -f ./src/ad/Dockerfile --build-arg OTEL_JAVA_AGENT_VERSION=$JAVA_AGENT -t $USER/ad:s2 .
+                docker build -f ./src/cart/src/Dockerfile         -t $USER/cart:s3 .
+                docker build -f ./src/checkout/Dockerfile         -t $USER/checkout:s4 .
+                docker build -f ./src/currency/Dockerfile --build-arg OPENTELEMETRY_CPP_VERSION=$CPP_VER -t $USER/currency:s5 .
+                docker build -f ./src/email/Dockerfile            -t $USER/email:s6 .
+                docker build -f ./src/fraud-detection/Dockerfile --build-arg OTEL_JAVA_AGENT_VERSION=$JAVA_AGENT -t $USER/fraud-detection:s7 .
+                docker build -f ./src/frontend/Dockerfile         -t $USER/frontend:s8 .
+                docker build -f ./src/frontend-proxy/Dockerfile   -t $USER/frontend-proxy:s9 .
+                docker build -f ./src/image-provider/Dockerfile   -t $USER/image-provider:s10 .
+                docker build -f ./src/load-generator/Dockerfile   -t $USER/load-generator:s11 .
+                docker build -f ./src/payment/Dockerfile          -t $USER/payment:s12 .
+                docker build -f ./src/product-catalog/Dockerfile  -t $USER/product-catalog:s13 .
+                docker build -f ./src/quote/Dockerfile            -t $USER/quote:s14 .
+                docker build -f ./src/recommendation/Dockerfile   -t $USER/recommendation:s15 .
+                docker build -f ./src/shipping/Dockerfile         -t $USER/shipping:s16 .
+                docker build -f ./src/flagd-ui/Dockerfile         -t $USER/flagd-ui:s18 .
+                docker build -f ./src/kafka/Dockerfile --build-arg OTEL_JAVA_AGENT_VERSION=$JAVA_AGENT -t $USER/kafka:s19 .
+                docker build -f ./src/postgres/Dockerfile         -t $USER/postgresql:s20 .
+                docker build -f ./src/opensearch/Dockerfile       -t $USER/opensearch:s26 .
+                '''
+            }
+        }
+
+        stage('Pull and tag stock images') {
+            steps {
+                sh '''
+                docker pull ghcr.io/open-feature/flagd:v0.12.9
+                docker tag  ghcr.io/open-feature/flagd:v0.12.9 $USER/flagd:s17
+
+                docker pull valkey/valkey:8.1.3-alpine
+                docker tag  valkey/valkey:8.1.3-alpine $USER/valkey:s21
+
+                docker pull jaegertracing/jaeger:2.10.0
+                docker tag  jaegertracing/jaeger:2.10.0 $USER/jaeger:s22
+
+                docker pull grafana/grafana:12.2.0
+                docker tag  grafana/grafana:12.2.0 $USER/grafana:s23
+
+                docker pull ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.133.0
+                docker tag  ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.133.0 $USER/otel-collector:s24
+
+                docker pull quay.io/prometheus/prometheus:v3.5.0
+                docker tag  quay.io/prometheus/prometheus:v3.5.0 $USER/prometheus:s25
+                '''
+            }
+        }
+
+        stage('Docker Hub login') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                  usernameVariable: 'DH_USER',
+                                                  passwordVariable: 'DH_PASS')]) {
+                    sh 'echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin'
+                }
+            }
+        }
+
+        stage('Push images') {
+            steps {
+                sh '''
+                docker push $USER/accounting:s1
+                docker push $USER/ad:s2
+                docker push $USER/cart:s3
+                docker push $USER/checkout:s4
+                docker push $USER/currency:s5
+                docker push $USER/email:s6
+                docker push $USER/fraud-detection:s7
+                docker push $USER/frontend:s8
+                docker push $USER/frontend-proxy:s9
+                docker push $USER/image-provider:s10
+                docker push $USER/load-generator:s11
+                docker push $USER/payment:s12
+                docker push $USER/product-catalog:s13
+                docker push $USER/quote:s14
+                docker push $USER/recommendation:s15
+                docker push $USER/shipping:s16
+                docker push $USER/flagd:s17
+                docker push $USER/flagd-ui:s18
+                docker push $USER/kafka:s19
+                docker push $USER/postgresql:s20
+                docker push $USER/valkey:s21
+                docker push $USER/jaeger:s22
+                docker push $USER/grafana:s23
+                docker push $USER/otel-collector:s24
+                docker push $USER/prometheus:s25
+                docker push $USER/opensearch:s26
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                docker compose pull
+                docker compose up -d --remove-orphans
+                docker compose ps
+                '''
+            }
+        }
+
+        stage('Smoke test') {
+            steps {
+                sh '''
+                for i in $(seq 1 30); do
+                  code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ || true)
+                  echo "attempt $i -> HTTP $code"
+                  [ "$code" = "200" ] && exit 0
+                  sleep 10
+                done
+                echo "App did not become healthy"; exit 1
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker logout || true'
+        }
+        success { echo 'All 26 images built, pushed and deployed' }
+        failure { echo 'Pipeline failed - check the stage logs' }
+    }
+}
