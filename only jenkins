@@ -1,0 +1,56 @@
+# Run as root: sudo -i
+# Security group: allow inbound TCP 22 and 8080
+# Recommended: t3.small or bigger, 20 GB gp3 volume
+
+# 1. Swap (needed on small instances)
+dd if=/dev/zero of=/swapfile bs=1M count=2048
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+# 2. Java
+yum install java-21-amazon-corretto -y
+
+# 3. Jenkins repo and install
+wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/rpm-stable/jenkins.repo
+rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2023.key
+sed -i '/^gpgcheck/a sslverify=0' /etc/yum.repos.d/jenkins.repo
+yum install jenkins -y
+
+# 4. Trust the mirror certificate (before starting Jenkins)
+echo | openssl s_client -showcerts -connect ftp-nyc.osuosl.org:443 2>/dev/null | awk '/BEGIN CERT/,/END CERT/{print}' > /tmp/chain.pem
+cd /tmp && csplit -z -s -f cert- chain.pem '/-----BEGIN CERTIFICATE-----/' '{*}'
+for f in /tmp/cert-*; do keytool -importcert -noprompt -trustcacerts -cacerts -storepass changeit -alias "osuosl-$(basename $f)" -file $f; done
+
+# 5. Start Jenkins
+systemctl enable --now jenkins
+
+# 6. Admin password
+cat /var/lib/jenkins/secrets/initialAdminPassword
+
+# 7. Open in browser: http://<EC2-public-ip>:8080
+#    Paste password, choose "Install suggested plugins", create admin user
+
+# 8. If plugins fail: clean up and retry from Manage Jenkins > Plugins
+systemctl stop jenkins
+rm -f /var/lib/jenkins/plugins/*.tmp
+systemctl start jenkins
+
+# 9. If Built-In Node is offline (low temp space):
+#    Manage Jenkins > Nodes > Built-In Node > Configure
+#    Tick "Disk Space Monitoring Thresholds"
+#    Free Temp Space Threshold: 100MB, Free Disk Space Threshold: 500MB
+#    Save, then "Bring this node back online"
+#    Optional, use disk for /tmp instead of RAM:
+systemctl mask tmp.mount
+reboot
+
+# 10. Useful checks
+systemctl status jenkins
+journalctl -u jenkins -n 100 --no-pager | grep -E "Failed to install|PKIX|SEVERE" | tail -5
+df -h
+free -m
+
+# 11. Optional cleanup after install
+sed -i '/^sslverify=0/d' /etc/yum.repos.d/jenkins.repo
