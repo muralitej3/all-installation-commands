@@ -1,0 +1,88 @@
+##############################################
+# JENKINS + DOCKER ON AMAZON LINUX 2023 (EC2)
+# Run as root (sudo -i)
+##############################################
+
+# ---------- 0. AWS SETUP (console, not commands) ----------
+# - Security group: allow inbound TCP 22 (SSH) and 8080 (Jenkins)
+#   (restrict 8080 to your own IP if possible)
+# - Optional, for Session Manager: IAM role with AmazonSSMManagedInstanceCore
+#   (IAM -> Roles -> Create role -> AWS service -> EC2)
+
+# ---------- 1. JAVA ----------
+yum install java-21-amazon-corretto -y
+java -version
+
+# ---------- 2. JENKINS REPO + INSTALL ----------
+wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/rpm-stable/jenkins.repo
+rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2023.key
+
+# If you get Curl error (60) SSL certificate problem from the osuosl mirror:
+sed -i '/^gpgcheck/a sslverify=0' /etc/yum.repos.d/jenkins.repo
+
+yum install jenkins -y
+systemctl enable --now jenkins
+systemctl status jenkins
+
+# Initial admin password
+cat /var/lib/jenkins/secrets/initialAdminPassword
+
+# ---------- 3. DOCKER ----------
+yum install docker -y
+systemctl enable --now docker
+
+# Let Jenkins use Docker (safer than chmod 777 on the socket)
+usermod -aG docker jenkins
+systemctl restart docker jenkins
+
+# ---------- 4. GIT ----------
+yum install git -y
+
+# ---------- 5. TRIVY ----------
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+trivy --version
+
+# ---------- 6. FIX: JENKINS PLUGINS FAIL (PKIX / bad mirror cert) ----------
+# Symptom: "Installation Failures" in setup wizard, .tmp files in
+# /var/lib/jenkins/plugins, log shows PKIX path building failed
+# for ftp-nyc.osuosl.org
+
+systemctl stop jenkins
+rm -f /var/lib/jenkins/plugins/*.tmp
+
+echo | openssl s_client -showcerts -connect ftp-nyc.osuosl.org:443 2>/dev/null | \
+  awk '/BEGIN CERT/,/END CERT/{print}' > /tmp/chain.pem
+cd /tmp && rm -f cert-* && csplit -z -s -f cert- chain.pem '/-----BEGIN CERTIFICATE-----/' '{*}'
+for f in /tmp/cert-*; do
+  keytool -importcert -noprompt -trustcacerts -cacerts -storepass changeit \
+    -alias "osuosl-$(basename $f)" -file $f
+done
+# "already exists" = already imported, that is fine
+
+systemctl start jenkins
+
+# ---------- 7. INSTALL PLUGINS (Jenkins UI) ----------
+# Manage Jenkins -> Plugins -> Available plugins
+# Install: Pipeline (workflow-aggregator), Git, Credentials Binding,
+#          Docker Pipeline
+# Tick "Restart Jenkins when installation is complete"
+
+# Verify
+ls /var/lib/jenkins/plugins | grep -E "pipeline-model|workflow-aggregator"
+
+# ---------- 8. USEFUL CHECKS / TROUBLESHOOTING ----------
+journalctl -u jenkins -n 100 --no-pager | grep -E "Failed to install|PKIX|SEVERE" | tail -5
+systemctl status jenkins
+df -h /var/lib/jenkins
+free -m
+curl -I https://updates.jenkins.io
+
+# Memory low on small instance (t2/t3.micro)? Add swap:
+dd if=/dev/zero of=/swapfile bs=1M count=2048
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+
+# ---------- 9. AFTER INSTALL: CLEANUP ----------
+# Remove the sslverify=0 line from the Jenkins repo file
+sed -i '/^sslverify=0/d' /etc/yum.repos.d/jenkins.repo
