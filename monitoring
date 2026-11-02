@@ -21,6 +21,12 @@ url -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/script
 ####################################################################################################################################################################################3
 kubectl  patch svc prometheus-kube-prometheus-prometheus -p '{"spec":{"type":"LoadBalancer"}}'
 kubectl patch svc prometheus-grafana -p '{"spec":{"type":"LoadBalancer"}}'
+
+kubectl get secret prometheus-grafana -n default -o jsonpath='{.data.admin-password}' | base64 -d; echo
+
+
+
+
 for password use:-
 kubectl --namespace default get secrets prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 -d ; echo
 ##################################################################################################################################################################################
