@@ -19,10 +19,10 @@ kops create cluster \
   --name murali.k8s.local \
   --zones us-east-1a,us-east-1b \
   --control-plane-count 1 \
-  --control-plane-size c7i-flex.large \
+  --control-plane-size m7i-flex.large \
   --control-plane-volume-size 30 \
   --node-count 2 \
-  --node-size t3.medium \
+  --node-size c7i.medium \
   --node-volume-size 20 \
   --image=ami-0d97d7f07b25dd693
 
@@ -58,6 +58,24 @@ kops validate cluster --wait 10m
 export KOPS_STATE_STORE=s3://muralitej3-kops
 kops get cluster
 kops delete cluster --name murali.k8s.local --yes
+
+-------------------------------------------------------------------------
+export KOPS_STATE_STORE=s3://muralitej3-kops
+export AWS_REGION=us-east-1
+
+kops create cluster \
+  --name murali.k8s.local \
+  --zones us-east-1a,us-east-1b \
+  --control-plane-count 1 \
+  --control-plane-size m7i-flex.large \
+  --control-plane-volume-size 30 \
+  --node-count 2 \
+  --node-size c7i-flex.large \
+  --node-volume-size 20 \
+  --image ami-0d97d7f07b25dd693
+
+kops update cluster --name murali.k8s.local --yes --admin
+kops validate cluster --wait 10m
 
 
 
