@@ -22,6 +22,9 @@ kops create cluster \
   --image ami-0d97d7f07b25dd693
 
 kops update cluster --name murali.k8s.local --yes --admin
+
+export KOPS_STATE_STORE=s3://muralitej3-kops
+kops get clusters
 kops delete cluster --name murali.k8s.local --yes
 ---------------------------------------------------------------------------------------------------------------------------------------------
 Argocd:-
